@@ -1,15 +1,14 @@
 -- +migrate Up
 
 CREATE TABLE songs (
-                       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                       group_name VARCHAR(255),
-                       text TEXT,
-                       genre VARCHAR(50),
-                       date_added TIMESTAMP, -- добавляет поле для даты релиза
-                       link VARCHAR(255)
-)
+                       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),  -- ID песни, генерируется автоматически
+                       group_name VARCHAR(255),                        -- Название группы
+                       text TEXT,                                      -- Текст песни
+                       genre VARCHAR(50),                              -- Жанр песни
+                       date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP, -- Дата добавления (по умолчанию текущее время)
+                       link VARCHAR(255)                               -- Ссылка на песню
+);
 
 -- +migrate Down
 
 DROP TABLE IF EXISTS songs;
-

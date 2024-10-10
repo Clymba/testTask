@@ -54,44 +54,53 @@ func (s *Server) registerHandlers(ctx context.Context) {
 	api.Get("/view_song_with_filter", s.viewSongsWithFilter)
 	api.Put("/update_song/:id", s.updateSong)
 	api.Delete("/delete_song/:id", s.deleteSong)
-
 }
 
 func (s *Server) addSong(c *fiber.Ctx) error {
 	var song repository.Song
 	if err := c.BodyParser(&song); err != nil {
-		return s.handleError("Error parsing request body", err, fiber.StatusBadRequest)
+		logger.Log.Errorf("Ошибка парсинга: %v", err)
+		return s.handleError("Ошибка парсинга реквеста", err, fiber.StatusBadRequest)
 	}
 
 	if err := s.service.CreateSong(c.Context(), &song); err != nil {
-		return s.handleError("Failed to create song", err, fiber.StatusInternalServerError)
+		logger.Log.Errorf("Не создалась песня: %v", err)
+		return s.handleError("Не создалась песня", err, fiber.StatusInternalServerError)
 	}
 
+	logger.Log.Infof("Песня создалась: %+v", song)
 	return c.Status(fiber.StatusCreated).JSON(song)
 }
 
 func (s *Server) findSong(c *fiber.Ctx) error {
 	id, err := s.parseUUID(c.Params("id"))
 	if err != nil {
+		logger.Log.Warnf("Неправильный формат ID: %v", err)
 		return ErrInvalidID
 	}
 
 	song, err := s.service.GetSongByID(c.Context(), id)
 	if err != nil {
 		if errors.Is(err, service.ErrNotFound) {
+			logger.Log.Warnf("Песня не найдена: ID=%s", id)
 			return ErrSongNotFound
 		}
-		return s.handleError("Failed to fetch song", err, fiber.StatusInternalServerError)
+		logger.Log.Errorf("Не нашлась песня: %v", err)
+		return s.handleError("Не нашлась песня", err, fiber.StatusInternalServerError)
 	}
 
+	logger.Log.Infof("Песня: %+v", song)
 	return c.JSON(song)
 }
 
 func (s *Server) viewSongs(c *fiber.Ctx) error {
 	songs, err := s.service.GetAllSongs(c.Context())
 	if err != nil {
-		return s.handleError("Failed to fetch all songs", err, fiber.StatusInternalServerError)
+		logger.Log.Errorf("Не нашлись песни: %v", err)
+		return s.handleError("Не нашлись песни", err, fiber.StatusInternalServerError)
 	}
+
+	logger.Log.Infof("Песни: %d", len(songs))
 	return c.JSON(songs)
 }
 
@@ -114,59 +123,63 @@ func (s *Server) viewSongsWithFilter(c *fiber.Ctx) error {
 		limit = 10
 	}
 
-	logger.Log.Infof("Received filter parameters: groupName=%s, text=%s, genre=%s, link=%s, page=%d, limit=%d", groupName, text, genre, link, page, limit)
-
-	// Проверка, если все параметры пустые
 	if groupName == "" && text == "" && genre == "" && link == "" {
 		return s.viewSongs(c)
 	}
 
 	songs, err := s.service.GetFilteredSongs(c.Context(), groupName, text, genre, link, page, limit)
 	if err != nil {
-		logger.Log.Errorf("Error fetching filtered songs: %v", err)
-		return s.handleError("Failed to fetch filtered songs", err, fiber.StatusInternalServerError)
+		logger.Log.Errorf("Ошибка фильтрации: %v", err)
+		return s.handleError("Ошибка фильтрации", err, fiber.StatusInternalServerError)
 	}
 
-	logger.Log.Infof("Fetched %d songs: %+v", len(songs), songs)
+	logger.Log.Infof("Обнаруженные %d песни: %+v", len(songs), songs)
 	return c.JSON(songs)
 }
 
 func (s *Server) updateSong(c *fiber.Ctx) error {
 	id, err := s.parseUUID(c.Params("id"))
 	if err != nil {
+		logger.Log.Warnf("Неправильный id: %v", err)
 		return ErrInvalidID
 	}
 
 	var song repository.Song
 	if err := c.BodyParser(&song); err != nil {
-		return s.handleError("Error parsing request body", err, fiber.StatusBadRequest)
+		logger.Log.Errorf("Ошибка парсинга: %v", err)
+		return s.handleError("Ошибка парсинга", err, fiber.StatusBadRequest)
 	}
 
 	song.ID = id
 	if err := s.service.UpdateSong(c.Context(), &song); err != nil {
-		return s.handleError("Failed to update song", err, fiber.StatusInternalServerError)
+		logger.Log.Errorf("Не обновилась песня: %v", err)
+		return s.handleError("Не обновилась песня", err, fiber.StatusInternalServerError)
 	}
 
+	logger.Log.Infof("Успешно обновилась: %+v", song)
 	return c.JSON(song)
 }
 
 func (s *Server) deleteSong(c *fiber.Ctx) error {
 	id, err := s.parseUUID(c.Params("id"))
 	if err != nil {
+		logger.Log.Warnf("Не тот формат: %v", err)
 		return ErrInvalidID
 	}
 
 	if err := s.service.DeleteSong(c.Context(), id); err != nil {
-		return s.handleError("Failed to delete song", err, fiber.StatusInternalServerError)
+		logger.Log.Errorf("Не удалось удалить: %v", err)
+		return s.handleError("Не удалось удалить", err, fiber.StatusInternalServerError)
 	}
 
+	logger.Log.Infof("Удалось удалить: ID=%s", id)
 	return c.SendStatus(http.StatusNoContent)
 }
 
 func (s *Server) parseUUID(idStr string) (uuid.UUID, error) {
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		log.Printf("Invalid UUID format: %v", err)
+		log.Printf("Не тот формат: %v", err)
 	}
 	return id, err
 }

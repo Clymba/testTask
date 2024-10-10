@@ -1,5 +1,5 @@
 development:
   dialect: postgres
-  datasource: host=localhost dbname=postgresDB user=postgres password=postgres
+  datasource: host=127.0.0.1 port=5433 dbname=postgresDB user=postgres password=postgres sslmode=disable
   dir: migrations
   table: migrations

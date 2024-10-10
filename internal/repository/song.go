@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"github.com/Clymba/testTask/logger" // Импортируйте вашу библиотеку логирования
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"strings"
@@ -36,13 +37,14 @@ func (s *Repository) CreateSong(ctx context.Context, song *Song) error {
 	if err := s.pool.QueryRow(ctx, query, song.GroupName, song.Text, song.Genre, song.Date_added, song.Link).Scan(&song.ID); err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok {
 			newErr := fmt.Errorf(fmt.Sprintf("SQL Error: %s, Detail: %s, Where: %s, Code: %s, State: %s", pgErr.Message, pgErr.Detail, pgErr.Where, pgErr.Code, pgErr.SQLState()))
-			fmt.Println(newErr)
+			logger.Log.Errorf("Ошибка при сохранении песни: %v", newErr) // Логируем ошибку
 			return nil
 		}
-		fmt.Println("Ошибка при сохранении песни:", err)
+		logger.Log.Errorf("Ошибка при сохранении песни: %v", err) // Логируем ошибку
 		return err
 	}
 
+	logger.Log.Infof("Создана новая песня с ID: %s", song.ID) // Логируем успех
 	return nil
 }
 
@@ -50,13 +52,14 @@ func (s *Repository) GetSongByID(ctx context.Context, song *Song) error {
 	ctx, timeout := context.WithTimeout(ctx, s.config.Timeout)
 	defer timeout()
 
-	query := `SELECT group_name, text, genre, date_added, link 
-              FROM songs WHERE id = $1`
+	query := `SELECT group_name, text, genre, date_added, link FROM songs WHERE id = $1`
 
 	if err := s.pool.QueryRow(ctx, query, song.ID).Scan(&song.GroupName, &song.Text, &song.Genre, &song.Date_added, &song.Link); err != nil {
+		logger.Log.Errorf("Ошибка при получении песни с ID: %s, ошибка: %v", song.ID, err) // Логируем ошибку
 		return err
 	}
 
+	logger.Log.Infof("Получена песня с ID: %s", song.ID) // Логируем успех
 	return nil
 }
 
@@ -64,11 +67,11 @@ func (s *Repository) GetAllSongs(ctx context.Context) ([]Song, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()
 
-	query := `SELECT id, group_name, text, genre, date_added, link 
-              FROM songs`
+	query := `SELECT id, group_name, text, genre, date_added, link FROM songs`
 
 	rows, err := s.pool.Query(ctx, query)
 	if err != nil {
+		logger.Log.Errorf("Ошибка при получении всех песен: %v", err) // Логируем ошибку
 		return nil, err
 	}
 	defer rows.Close()
@@ -77,19 +80,22 @@ func (s *Repository) GetAllSongs(ctx context.Context) ([]Song, error) {
 	for rows.Next() {
 		var song Song
 		if err := rows.Scan(&song.ID, &song.GroupName, &song.Text, &song.Genre, &song.Date_added, &song.Link); err != nil {
+			logger.Log.Errorf("Ошибка при сканировании песни: %v", err) // Логируем ошибку
 			return nil, err
 		}
 		songs = append(songs, song)
 	}
 
 	if err := rows.Err(); err != nil {
+		logger.Log.Errorf("Ошибка при обработке результатов запроса: %v", err) // Логируем ошибку
 		return nil, err
 	}
 
+	logger.Log.Infof("Получено %d песен", len(songs)) // Логируем успех
 	return songs, nil
 }
 
-func (s *Repository) GetFilteredSongs(ctx context.Context, groupName, text, genre, link string, page, limit int) ([]Song, error) {
+func (s *Repository) GetFilteredOrPaginationSongs(ctx context.Context, groupName, text, genre, link string, page, limit int) ([]Song, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()
 
@@ -99,7 +105,7 @@ func (s *Repository) GetFilteredSongs(ctx context.Context, groupName, text, genr
 	conditions := []string{}
 
 	if groupName != "" {
-		conditions = append(conditions, fmt.Sprintf("group_name ILIKE $%d", argCount)) // Исправлено на group_name
+		conditions = append(conditions, fmt.Sprintf("group_name ILIKE $%d", argCount))
 		args = append(args, "%"+groupName+"%")
 		argCount++
 	}
@@ -117,7 +123,7 @@ func (s *Repository) GetFilteredSongs(ctx context.Context, groupName, text, genr
 	}
 
 	if link != "" {
-		conditions = append(conditions, fmt.Sprintf("link ILIKE $%d", argCount)) // Исправлено на link
+		conditions = append(conditions, fmt.Sprintf("link ILIKE $%d", argCount))
 		args = append(args, "%"+link+"%")
 		argCount++
 	}
@@ -132,6 +138,7 @@ func (s *Repository) GetFilteredSongs(ctx context.Context, groupName, text, genr
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
+		logger.Log.Errorf("Ошибка при получении отфильтрованных песен: %v", err) // Логируем ошибку
 		return nil, err
 	}
 	defer rows.Close()
@@ -140,15 +147,18 @@ func (s *Repository) GetFilteredSongs(ctx context.Context, groupName, text, genr
 	for rows.Next() {
 		var song Song
 		if err := rows.Scan(&song.ID, &song.GroupName, &song.Text, &song.Genre, &song.Date_added, &song.Link); err != nil {
+			logger.Log.Errorf("Ошибка при сканировании отфильтрованной песни: %v", err) // Логируем ошибку
 			return nil, err
 		}
 		songs = append(songs, song)
 	}
 
 	if err := rows.Err(); err != nil {
+		logger.Log.Errorf("Ошибка при обработке результатов фильтрации: %v", err) // Логируем ошибку
 		return nil, err
 	}
 
+	logger.Log.Infof("Получено %d отфильтрованных песен", len(songs)) // Логируем успех
 	return songs, nil
 }
 
@@ -156,14 +166,14 @@ func (s *Repository) UpdateSong(ctx context.Context, song *Song) error {
 	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()
 
-	query := `UPDATE songs 
-			  SET group_name = $1, text = $2, genre = $3, date_added = $4 
-			  WHERE id = $5`
+	query := `UPDATE songs SET group_name = $1, text = $2, genre = $3, date_added = $4 WHERE id = $5`
 
 	if _, err := s.pool.Exec(ctx, query, song.GroupName, song.Text, song.Genre, song.Date_added, song.ID); err != nil {
+		logger.Log.Errorf("Ошибка при обновлении песни с ID: %s, ошибка: %v", song.ID, err) // Логируем ошибку
 		return err
 	}
 
+	logger.Log.Infof("Обновлена песня: %s", song.ID) // Логируем успех
 	return nil
 }
 
@@ -171,10 +181,13 @@ func (s *Repository) DeleteSong(ctx context.Context, song *Song) error {
 	ctx, timeout := context.WithTimeout(ctx, s.config.Timeout)
 	defer timeout()
 
-	query := `DELETE from songs 
-       		  WHERE id = $1`
+	query := `DELETE FROM songs WHERE id = $1`
 
-	_, err := s.pool.Exec(ctx, query, &song.ID)
+	if _, err := s.pool.Exec(ctx, query, song.ID); err != nil {
+		logger.Log.Errorf("Не удалось удалить песню: %s, ошибка: %v", song.ID, err) // Логируем ошибку
+		return err
+	}
 
-	return err
+	logger.Log.Infof("Удалена песня с ID: %s", song.ID) // Логируем успех
+	return nil
 }

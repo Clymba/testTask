@@ -13,12 +13,15 @@ func InitLogger() {
 		FullTimestamp: true,
 	})
 
-	Log.SetLevel(logrus.InfoLevel)
+	Log.SetLevel(logrus.DebugLevel)
 
-	file, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile("../app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err == nil {
 		Log.SetOutput(file)
+		Log.Debug("Логирование: app.log")
 	} else {
-		Log.Info("Failed to log to file, using default stderr")
+		Log.Info("Не удалось запустить логер")
 	}
+
+	Log.Debug("Логер стартанул")
 }

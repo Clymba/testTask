@@ -1,6 +1,6 @@
 module github.com/Clymba/testTask
 
-go 1.21.2
+go 1.21
 
 require (
 	github.com/caarlos0/env/v9 v9.0.0
