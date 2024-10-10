@@ -108,7 +108,7 @@ func (s *Server) viewSongsWithFilter(c *fiber.Ctx) error {
 	groupName := c.Query("group_name")
 	text := c.Query("text")
 	genre := c.Query("genre")
-	link := c.Query("link") // Добавляем извлечение параметра link
+	link := c.Query("link")
 
 	pageStr := c.Query("page", "1")
 	limitStr := c.Query("limit", "10")
